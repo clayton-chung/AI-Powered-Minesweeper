@@ -15,7 +15,7 @@ Guaranteed to be compatible on any Linux system with SFML support.
 
 Windows/macOS untested.
 ```bash
-git clone
+git clone git@github.com:clayton-chung/AI-Powered-Minesweeper.git
 cd minesweeper
 mkdir build && cd build
 cmake ..
