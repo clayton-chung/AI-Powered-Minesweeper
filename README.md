@@ -1,5 +1,7 @@
 # AI-Powered Minesweeper
 
+[![CI](https://github.com/clayton-chung/AI-Powered-Minesweeper/actions/workflows/ci.yml/badge.svg)](https://github.com/clayton-chung/AI-Powered-Minesweeper/actions/workflows/ci.yml)
+
 A C++ Minesweeper built on [SFML](https://www.sfml-dev.org/), with a built-in solver that handles every deterministic move so the player only has to make actual guesses.
 
 ![demo.gif](assets/demo.gif)
