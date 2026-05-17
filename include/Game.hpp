@@ -7,18 +7,14 @@ public:
     static constexpr int    FRAME_RATE = 60;
 
     // Construction & main loop
-    Game();
+    Game(int rows, int cols, int numMines);
     void run();
 
 private:
-    // Configuration
-    // Difficulty may be adjusted here. Suggested difficulties:
-    //      Easy:   9  rows x 9  cols, 10 mines
-    //      Medium: 16 rows x 16 cols, 40 mines
-    //      Hard:   16 rows x 30 cols, 99 mines
-    static constexpr int    ROWS            = 16;
-    static constexpr int    COLS            = 16;
-    static constexpr int    NUM_MINES       = 40;
+    // Configuration (set at construction; see main.cpp for difficulty presets)
+    int                     rows_;
+    int                     cols_;
+    int                     numMines_;
     static constexpr float  TILE_SIZE       = 50.f;
     sf::Time                AISolveDelay_   = sf::milliseconds(200);
 

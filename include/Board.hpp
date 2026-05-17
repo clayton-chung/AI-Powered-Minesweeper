@@ -51,4 +51,17 @@ private:
 
     // Internal helpers
     void computeAdjacentMines();
+
+    // Invokes fn(nx, ny, Tile&) for each in-bounds 8-neighbor of (x, y).
+    template<typename F>
+    void forEachNeighbor(int x, int y, F&& fn) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            for (int dx = -1; dx <= 1; ++dx) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = x + dx;
+                int ny = y + dy;
+                if (inBounds(nx, ny)) fn(nx, ny, tiles[index(nx, ny)]);
+            }
+        }
+    }
 };

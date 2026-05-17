@@ -1,6 +1,21 @@
+# Build output
 /build/
-/*.exe
-/*.o
-/*.a
 
+# Compiled object/library files
+*.o
+*.a
+*.so
+*.out
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# IDE / editor
 .vscode/
+.idea/
+*.swp
+*.swo
+

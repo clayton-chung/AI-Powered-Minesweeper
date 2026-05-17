@@ -1,8 +1,11 @@
 #include "Game.hpp"
 
-Game::Game()
-: window(sf::VideoMode(COLS * TILE_SIZE, ROWS * TILE_SIZE + 50), "AI-Powered Minesweeper")
-, board(ROWS, COLS, TILE_SIZE, NUM_MINES)
+Game::Game(int rows, int cols, int numMines)
+: rows_(rows)
+, cols_(cols)
+, numMines_(numMines)
+, window(sf::VideoMode(cols_ * TILE_SIZE, rows_ * TILE_SIZE + 50), "AI-Powered Minesweeper")
+, board(rows_, cols_, TILE_SIZE, numMines_)
 {
     window.setFramerateLimit(FRAME_RATE);
 
@@ -16,7 +19,7 @@ Game::Game()
     float btnSize   = 40.f;
     float winW      = (float)window.getSize().x;
     float winH      = (float)window.getSize().y;
-    float gridH     = ROWS * TILE_SIZE;
+    float gridH     = rows_ * TILE_SIZE;
     float uiH       = winH - gridH;
     float btnX      = (winW - btnSize) / 2.f;
     float btnY      = gridH  + (uiH - btnSize) / 2.f;
@@ -93,8 +96,8 @@ Game::Game()
     }
 
     // Set up the game view to allow resizing of window
-    float worldW = COLS * TILE_SIZE;
-    float worldH = ROWS * TILE_SIZE + uiH;
+    float worldW = cols_ * TILE_SIZE;
+    float worldH = rows_ * TILE_SIZE + uiH;
     gameView_.reset({0.f, 0.f, worldW, worldH});
     window.setView(gameView_);
 }
@@ -123,7 +126,7 @@ void Game::processEvents() {
             // Watch for restart button click
             sf::Vector2f mp(worldPos.x, worldPos.y);
             if (restartButton_.getGlobalBounds().contains(mp)) {
-                board.reset(ROWS, COLS, NUM_MINES);
+                board.reset(rows_, cols_, numMines_);
                 state_ = GameState::PLAYING;
                 continue;
             }
@@ -215,7 +218,7 @@ void Game::render() {
     window.draw(eyeLeft_);
     window.draw(eyeRight_);
     window.draw(smileMouth_);
-    int flagsLeft = NUM_MINES - board.flagCount();
+    int flagsLeft = numMines_ - board.flagCount();
     flagCountText_.setString(": " + std::to_string(flagsLeft));
     window.draw(flagIconText_);
     window.draw(flagCountText_);

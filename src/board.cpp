@@ -50,27 +50,7 @@ void Board::reset(int rows, int cols, int numMines) {
     }
 
     // Compute number of adjacent mines for each tile
-    for (int y = 0; y < rows_; ++y) {
-        for (int x = 0; x < cols_; ++x) {
-            Tile& t = tiles[index(x,y)];
-            if (t.mine) continue;
-
-            int adjacentCount = 0;
-            for (int dy = -1; dy <= 1; ++dy) {
-                for (int dx = -1; dx <= 1; ++dx) {
-                    if (dx==0 && dy==0) continue;
-
-                    int newX = x + dx;
-                    int newY = y + dy;
-                    if (inBounds(newX, newY) && tiles[index(newX, newY)].mine) {
-                        ++adjacentCount;
-                    }
-                }
-                
-                t.adjacentMines = adjacentCount;
-            }
-        }
-    }
+    computeAdjacentMines();
 
     // Reset highlight state
     highlightX_ = -1;
@@ -149,17 +129,12 @@ bool Board::reveal(int x, int y) {
     if (firstClick_) {
         firstClick_ = false;
 
-        // Build a set of safe tiles around the first click
+        // Build a set of safe tiles around the first click (3x3 including center)
         std::unordered_set<int> safeTiles;
-        for (int dy = -1; dy <= 1; ++dy) {
-            for (int dx = -1; dx <= 1; ++dx) {
-                int newX = x + dx;
-                int newY = y + dy;
-                if (inBounds(newX, newY)) {
-                    safeTiles.insert(index(newX, newY));
-                }
-            }
-        }
+        safeTiles.insert(index(x, y));
+        forEachNeighbor(x, y, [&](int nx, int ny, const Tile&) {
+            safeTiles.insert(index(nx, ny));
+        });
 
         // Gather the mines in the safe area
         std::vector<int> toMove;
@@ -199,15 +174,9 @@ bool Board::reveal(int x, int y) {
     
     // Flood fill/reveal adjacent tiles if this tile has no adjacent mines.
     if (!t.mine && t.adjacentMines == 0) {
-        for (int dy = -1; dy <= 1; ++dy) {
-            for (int dx = -1; dx <= 1; ++dx) {
-                if (dx==0 && dy==0) continue;
-
-                int newX = x + dx;
-                int newY = y + dy;
-                reveal(newX, newY);
-            }
-        }
+        forEachNeighbor(x, y, [&](int nx, int ny, Tile&) {
+            reveal(nx, ny);
+        });
     }
 
     return false;
@@ -226,7 +195,7 @@ void Board::flag(int x, int y) {
 
 // Win condition: all non-mine tiles are revealed.
 bool Board::isCleared() const {
-    for (auto& t : tiles) {
+    for (const auto& t : tiles) {
         if (!t.revealed && !t.mine) {
             return false;
         }
@@ -238,60 +207,31 @@ bool Board::isCleared() const {
 //        that are not flagged. Only allowed if
 //        number of adjacent flagged tiles == number of adjacent mines
 bool Board::chord(int x, int y) {
-    if (!inBounds(x,y)) return false;
+    if (!inBounds(x, y)) return false;
 
-    Tile& t = tiles[index(x,y)];
-
+    const Tile& t = tiles[index(x, y)];
     if (!t.revealed || t.flagged) return false;
 
     // Count number of flagged neighbors
     int flags = 0;
-    for (int dy = -1; dy <= 1; ++dy) {
-        for (int dx = -1; dx <= 1; ++dx) {
-            if (dx==0 && dy==0) continue;
+    forEachNeighbor(x, y, [&](int, int, const Tile& n) {
+        if (n.flagged) ++flags;
+    });
 
-            int newX = x + dx;
-            int newY = y + dy;
-            if (inBounds(newX, newY) && tiles[index(newX, newY)].flagged) {
-                ++flags;
-            }
-        }
-    }
-
-    if (flags != t.adjacentMines) {
-        return false;
-    }
+    if (flags != t.adjacentMines) return false;
 
     // Number of adjacent flagged tiles == number of adjacent mines, proceed.
     bool hit = false;
-    for (int dy = -1; dy <= 1; ++dy) {
-        for (int dx = -1; dx <= 1; ++dx) {
-            if (dx==0 && dy==0) {
-                continue;
-            }
+    forEachNeighbor(x, y, [&](int nx, int ny, Tile& n) {
+        if (n.flagged) return;
 
-            int newX = x+dx;
-            int newY = y+dy;
-            if (!inBounds(newX, newY)) {
-                continue;
-            }
-
-            Tile& n = tiles[index(newX, newY)];
-
-            // Skip flagged tiles
-            if (n.flagged) {
-                continue;
-            }
-
-            // Unrevealed tile is a mine
-            if (n.mine) {
-                n.revealed = true;
-                hit = true;
-            } else {
-                reveal(newX, newY);
-            }
+        if (n.mine) {
+            n.revealed = true;
+            hit = true;
+        } else {
+            reveal(nx, ny);
         }
-    }
+    });
 
     return hit;
 }
@@ -309,7 +249,7 @@ int Board::getAdjacentMines(int x, int y) const {
 // Returns the number of flagged tiles
 int Board::flagCount() const {
     int count = 0;
-    for (auto& t : tiles) {
+    for (const auto& t : tiles) {
         if (t.flagged) {
             ++count;
         }
@@ -321,22 +261,14 @@ int Board::flagCount() const {
 void Board::computeAdjacentMines() {
     for (int y = 0; y < rows_; ++y) {
         for (int x = 0; x < cols_; ++x) {
-            Tile& t = tiles[index(x,y)];
+            Tile& t = tiles[index(x, y)];
             t.adjacentMines = 0;
 
             if (t.mine) continue;
 
-            for (int dy = -1; dy <= 1; ++dy) {
-                for (int dx = -1; dx <= 1; ++dx) {
-                    if (dx==0 && dy==0) continue;
-
-                    int newX = x + dx;
-                    int newY = y + dy;
-                    if (inBounds(newX, newY) && tiles[index(newX, newY)].mine) {
-                        ++t.adjacentMines;
-                    }
-                }
-            }
+            forEachNeighbor(x, y, [&](int, int, const Tile& n) {
+                if (n.mine) ++t.adjacentMines;
+            });
         }
     }
 }
@@ -351,7 +283,7 @@ void Board::computeAdjacentMines() {
 bool Board::AISolver() {
     for (int y = 0; y < rows_; ++y) {
         for (int x = 0; x < cols_; ++x) {
-            Tile& t = tiles[index(x,y)];
+            const Tile& t = tiles[index(x, y)];
             if (!t.revealed || t.mine) continue;
 
             highlightX_ = x;
@@ -360,60 +292,28 @@ bool Board::AISolver() {
             // Counts flagged and unrevealed neighbors.
             int flagCount = 0;
             int unrevealedCount = 0;
-
-            for (int dy = -1; dy <= 1; ++dy) {
-                for (int dx = -1; dx <= 1; ++dx) {
-                    if (dx==0 && dy==0) continue;
-
-                    int newX = x + dx;
-                    int newY = y + dy;
-                    if (!inBounds(newX, newY)) continue;
-                    Tile& n = tiles[index(newX, newY)];
-
-                    if (n.flagged) {
-                        ++flagCount;
-                    } else if (!n.revealed) {
-                        ++unrevealedCount;
-                    }
+            forEachNeighbor(x, y, [&](int, int, const Tile& n) {
+                if (n.flagged) {
+                    ++flagCount;
+                } else if (!n.revealed) {
+                    ++unrevealedCount;
                 }
-            }
+            });
 
             // Rule 1
             if (flagCount == t.adjacentMines && unrevealedCount > 0) {
-                for (int dy = -1; dy <= 1; ++dy) {
-                    for (int dx = -1; dx <= 1; ++dx) {
-                        if (dx==0 && dy==0) continue;
-
-                        int newX = x + dx;
-                        int newY = y + dy;
-                        if (!inBounds(newX, newY)) continue;
-                        Tile& n = tiles[index(newX, newY)];
-
-                        if (!n.revealed && !n.flagged) {
-                            reveal(newX, newY);
-                        }
-                    }
-                }
+                forEachNeighbor(x, y, [&](int nx, int ny, Tile& n) {
+                    if (!n.revealed && !n.flagged) reveal(nx, ny);
+                });
                 return true;
             }
 
             // Rule 2
             int minesLeft = t.adjacentMines - flagCount;
             if (minesLeft > 0 && unrevealedCount == minesLeft) {
-                for (int dy = -1; dy <= 1; ++dy) {
-                    for (int dx = -1; dx <= 1; ++dx) {
-                        if (dx==0 && dy==0) continue;
-
-                        int newX = x + dx;
-                        int newY = y + dy;
-                        if (!inBounds(newX, newY)) continue;
-                        Tile& n = tiles[index(newX, newY)];
-
-                        if (!n.revealed && !n.flagged) {
-                            n.flagged = true;
-                        }
-                    }
-                }
+                forEachNeighbor(x, y, [&](int, int, Tile& n) {
+                    if (!n.revealed && !n.flagged) n.flagged = true;
+                });
                 return true;
             }
         }
