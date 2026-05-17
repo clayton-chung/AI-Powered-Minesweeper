@@ -1,3 +1,5 @@
+#pragma once
+
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <random>
@@ -5,6 +7,8 @@
 #include <numeric>
 #include <array>
 #include <unordered_set>
+#include <optional>
+#include <cstdint>
 
 struct Tile {
     bool                revealed        = false;
@@ -17,11 +21,13 @@ struct Tile {
 class Board {
 public:
     // Construction & drawing
-    Board(int rows, int cols, float tileSize, int numMines);
+    Board(int rows, int cols, float tileSize, int numMines,
+          std::optional<std::uint32_t> seed = std::nullopt);
     void draw(sf::RenderWindow& window);
 
     // Game logic
-    void reset(int rows, int cols, int numMines);
+    void reset(int rows, int cols, int numMines,
+               std::optional<std::uint32_t> seed = std::nullopt);
     bool reveal(int x, int y);
     void flag(int x, int y);
     bool isCleared() const;
@@ -29,6 +35,16 @@ public:
     bool isRevealed(int x, int y) const;
     int  getAdjacentMines(int x, int y) const;
     int  flagCount() const;
+
+    // Test / puzzle setup hooks
+    // Replaces the current mine layout with mines at the given linear indices
+    // (y * cols + x) and recomputes adjacency. By default consumes first-click
+    // safety, treating the board as already in progress so reveal()'s next
+    // call won't relocate the mines we just placed.
+    void placeMinesAt(const std::vector<int>& indices, bool consumeFirstClick = true);
+    int  mineCount()   const;
+    bool hasMineAt   (int x, int y) const;
+    bool isFlaggedAt (int x, int y) const;
 
     // Utilities
     int  index(int x, int y) const;
@@ -44,6 +60,7 @@ private:
     std::vector<Tile>   tiles;
     sf::Font            font_;
     bool                firstClick_ = true;
+    std::mt19937        rng_;
 
     // Highlight state
     int highlightX_ = -1;

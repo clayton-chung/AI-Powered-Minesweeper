@@ -15,6 +15,22 @@ make
 
 The build copies `assets/` into the build directory automatically (via CMakeLists.txt). The executable must be run from the build directory so it can find `assets/mine-sweeper.ttf` at runtime.
 
+## Testing
+
+Catch2 v3 is pulled in via `FetchContent` and the test target is gated on `MINESWEEPER_BUILD_TESTS` (ON by default). Running `make` builds both `Minesweeper` and `test_board`. To run the suite:
+
+```bash
+cd build
+ctest --output-on-failure        # or: ./tests/test_board
+```
+
+Tests live in `tests/test_board.cpp` and link directly against `src/board.cpp` (no separate library target). The test working directory is `build/tests/`, where the CMake script mirrors `assets/` so `Board`'s font load succeeds.
+
+Board exposes a few APIs intended for tests and puzzle setup:
+- `Board(rows, cols, tileSize, numMines, seed)` / `reset(..., seed)` — the optional `std::uint32_t` seed feeds the member `std::mt19937` for deterministic layouts.
+- `placeMinesAt(indices, consumeFirstClick=true)` — bypasses random placement entirely; `consumeFirstClick=false` preserves first-click safety semantics so reveal() will still relocate mines.
+- `mineCount()`, `hasMineAt(x, y)`, `isFlaggedAt(x, y)` — read-only inspection.
+
 ## Architecture
 
 Three source files, two classes:

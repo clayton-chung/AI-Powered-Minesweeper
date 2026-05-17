@@ -1,7 +1,9 @@
 #include "Board.hpp"
 
-Board::Board(int rows, int cols, float tileSize, int numMines) 
-: rows_(rows), cols_(cols), tileSize_(tileSize) {
+Board::Board(int rows, int cols, float tileSize, int numMines,
+             std::optional<std::uint32_t> seed)
+: rows_(rows), cols_(cols), tileSize_(tileSize),
+  rng_(seed.value_or(std::random_device{}())) {
 
     // Load font for numbers, flags, mine, etc.
     if (!font_.loadFromFile("assets/mine-sweeper.ttf")) {
@@ -9,7 +11,7 @@ Board::Board(int rows, int cols, float tileSize, int numMines)
     }
 
     tiles.resize(rows_*cols_);
-    
+
     // Initialize tile shapes and positions
     for (int y = 0; y < rows_; ++y) {
         for (int x = 0; x < cols_; ++x) {
@@ -25,7 +27,10 @@ Board::Board(int rows, int cols, float tileSize, int numMines)
 }
 
 // Resets the board to a new, random state
-void Board::reset(int rows, int cols, int numMines) {
+void Board::reset(int rows, int cols, int numMines,
+                  std::optional<std::uint32_t> seed) {
+    if (seed) rng_.seed(*seed);
+
     firstClick_ = true;
     rows_ = rows;
     cols_ = cols;
@@ -42,9 +47,7 @@ void Board::reset(int rows, int cols, int numMines) {
     // Randomly place mines
     std::vector<int> minePositions(rows_ * cols_);
     std::iota(minePositions.begin(), minePositions.end(), 0);
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::shuffle(minePositions.begin(), minePositions.end(), gen);
+    std::shuffle(minePositions.begin(), minePositions.end(), rng_);
     for (int i = 0; i < numMines; ++i) {
         tiles[minePositions[i]].mine = true;
     }
@@ -153,7 +156,7 @@ bool Board::reveal(int x, int y) {
                 pool.push_back(i);
             }
         }
-        std::shuffle(pool.begin(), pool.end(), std::mt19937(std::random_device()()));
+        std::shuffle(pool.begin(), pool.end(), rng_);
 
         for (int i = 0; i < (int)toMove.size(); ++i) {
             tiles[pool[i]].mine = true;
@@ -343,4 +346,45 @@ int Board::getHighlightX() const {
 // Returns the y-coordinate of the highlighted tile
 int Board::getHighlightY() const {
     return highlightY_;
+}
+
+// Test / puzzle setup: replace the current mine layout with mines at the
+// given linear indices. Clears revealed/flagged state and recomputes adjacency.
+void Board::placeMinesAt(const std::vector<int>& indices, bool consumeFirstClick) {
+    const int N = static_cast<int>(tiles.size());
+
+    for (auto& t : tiles) {
+        t.revealed      = false;
+        t.flagged       = false;
+        t.mine          = false;
+        t.adjacentMines = 0;
+    }
+
+    for (int idx : indices) {
+        if (idx >= 0 && idx < N) {
+            tiles[idx].mine = true;
+        }
+    }
+
+    firstClick_  = !consumeFirstClick;
+    highlightX_  = -1;
+    highlightY_  = -1;
+
+    computeAdjacentMines();
+}
+
+int Board::mineCount() const {
+    int count = 0;
+    for (const auto& t : tiles) {
+        if (t.mine) ++count;
+    }
+    return count;
+}
+
+bool Board::hasMineAt(int x, int y) const {
+    return inBounds(x, y) && tiles[index(x, y)].mine;
+}
+
+bool Board::isFlaggedAt(int x, int y) const {
+    return inBounds(x, y) && tiles[index(x, y)].flagged;
 }
