@@ -286,3 +286,121 @@ TEST_CASE("isCleared becomes true after all non-mines are revealed", "[board][wi
     b.reveal(2, 2);                       // floods, revealing every non-mine tile
     REQUIRE(b.isCleared());
 }
+
+// =============================================================================
+// Adversarial / brittleness probes
+//
+// The tests above prove the happy paths work. The ones below stress the
+// public API with input shapes a real caller might produce by accident:
+// flagging-then-revealing, chording the wrong tile, calling AISolver on a
+// board that has nothing to act on, passing junk indices to placeMinesAt,
+// querying coordinates outside the grid. These are the regressions that
+// surface when a feature is added later and someone forgets a guard.
+// =============================================================================
+
+TEST_CASE("Revealing a flagged tile is a no-op", "[board][flag][adversarial]") {
+    Board b(5, 5, kTileSize, 0, kSeedA);
+    b.placeMinesAt({0});
+
+    b.flag(1, 1);
+    REQUIRE(b.isFlaggedAt(1, 1));
+
+    const bool hit = b.reveal(1, 1);
+    REQUIRE_FALSE(hit);
+    REQUIRE_FALSE(b.isRevealed(1, 1));
+    REQUIRE(b.isFlaggedAt(1, 1));         // flag must survive the attempt
+}
+
+TEST_CASE("Chord on a flagged or unrevealed tile is a no-op", "[board][chord]") {
+    Board b(5, 5, kTileSize, 0, kSeedA);
+    b.placeMinesAt({0});
+
+    SECTION("Flagged tile") {
+        b.flag(2, 2);
+        REQUIRE_FALSE(b.chord(2, 2));
+    }
+    SECTION("Unrevealed tile") {
+        REQUIRE_FALSE(b.isRevealed(2, 2));
+        REQUIRE_FALSE(b.chord(2, 2));
+        REQUIRE_FALSE(b.isRevealed(1, 1));
+        REQUIRE_FALSE(b.isRevealed(3, 3));
+    }
+}
+
+TEST_CASE("AISolver on an untouched board returns false", "[board][ai]") {
+    Board b(9, 9, kTileSize, 10, kSeedA);
+    // No tiles revealed — solver has no constraints to act on.
+    REQUIRE_FALSE(b.AISolver());
+}
+
+TEST_CASE("Repeated AISolver calls reach a fixed point", "[board][ai][termination]") {
+    Board b(5, 5, kTileSize, 0, kSeedA);
+    b.placeMinesAt({0});                  // mine at (0,0)
+    b.reveal(2, 2);                       // flood reveals every non-mine
+
+    int iterations = 0;
+    constexpr int kSafetyCap = 200;
+    while (b.AISolver()) {
+        ++iterations;
+        REQUIRE(iterations < kSafetyCap); // would fire on a non-terminating loop
+    }
+    REQUIRE(iterations >= 1);             // sanity: at least one move was made
+}
+
+TEST_CASE("placeMinesAt clamps out-of-range indices", "[board][safety]") {
+    Board b(3, 3, kTileSize, 0, kSeedA);
+    b.placeMinesAt({-1, 0, 9, 100});      // only 0 is valid for a 3x3
+
+    REQUIRE(b.mineCount() == 1);
+    REQUIRE(b.hasMineAt(0, 0));
+}
+
+TEST_CASE("Out-of-bounds queries return safe defaults", "[board][bounds]") {
+    Board b(3, 3, kTileSize, 0, kSeedA);
+    b.placeMinesAt({0});
+    b.flag(1, 1);
+
+    REQUIRE(b.getAdjacentMines(-1, 0) == 0);
+    REQUIRE(b.getAdjacentMines(3, 0)  == 0);
+    REQUIRE_FALSE(b.isRevealed   (-1,  0));
+    REQUIRE_FALSE(b.isRevealed   ( 3,  3));
+    REQUIRE_FALSE(b.hasMineAt    (-1, -1));
+    REQUIRE_FALSE(b.hasMineAt    ( 3,  3));
+    REQUIRE_FALSE(b.isFlaggedAt  (-1,  0));
+    REQUIRE_FALSE(b.isFlaggedAt  ( 3,  3));
+}
+
+// =============================================================================
+// Bug-documenting tests (Catch2 [!shouldfail])
+//
+// These assert the *correct* behavior, which the current implementation does
+// not provide. The [!shouldfail] tag inverts pass/fail so CI stays green
+// while the bug exists. The day someone fixes the bug, the assertion starts
+// passing, [!shouldfail] flips that to a CI failure, and the tag must be
+// removed — which doubles as the regression test going forward.
+// =============================================================================
+
+TEST_CASE("BUG: isCleared returns true even after a mine is revealed",
+          "[board][bug][!shouldfail]") {
+    // Board::isCleared() only loops over non-mine tiles. If a mine ever gets
+    // revealed (e.g. chord-hits-mine with a mis-placed flag), the function
+    // still reports cleared, even though the game was lost. Game currently
+    // masks this by checking the hit flag first; isCleared should be
+    // self-contained.
+    Board b(3, 3, kTileSize, 0, kSeedA);
+    b.placeMinesAt({0});
+
+    b.reveal(2, 2);                       // floods every non-mine
+    REQUIRE(b.isCleared());               // baseline
+
+    b.reveal(0, 0);                       // mine revealed -> game was lost
+    REQUIRE_FALSE(b.isCleared());         // EXPECTED: false; ACTUAL: true
+}
+
+TEST_CASE("BUG: reset silently accepts negative numMines",
+          "[board][bug][!shouldfail]") {
+    // A negative numMines slips through the for-loop in reset() and silently
+    // produces a mine-free board. The API should reject or clamp instead.
+    Board b(3, 3, kTileSize, 0, kSeedA);
+    REQUIRE_THROWS(b.reset(3, 3, -5));    // EXPECTED throw; ACTUAL silent no-op
+}
